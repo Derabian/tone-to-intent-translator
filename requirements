@@ -1,0 +1,7 @@
+streamlit
+librosa
+numpy
+tempfile2
+openai>=1.0.0
+python-dotenv
+elevenlabs
