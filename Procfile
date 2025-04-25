@@ -1,2 +1,2 @@
-web: streamlit run protoai.py --server.port=$PORT
+web: heroku run protoai.py --server.port=$PORT
 
