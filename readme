@@ -35,8 +35,6 @@ pip install streamlit librosa openai python-dotenv elevenlabs
 
 Create a file called .env in the project root:
 
-OPENAI_API_KEY=sk-...
-
 (Your ElevenLabs key is currently hardcoded in the script — consider moving that to the .env as well.)
 
 4. Run the App
