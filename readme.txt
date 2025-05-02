@@ -20,7 +20,7 @@ On-Device Playback: Play the tone and synthesized voice side-by-side
 
 1. Clone the Repository
 
-git clone https://github.com/your-username/tone-intent-translator.git
+git clone https://github.com/Derabian/tone-intent-translator.git
 cd tone-intent-translator
 
 2. Install Dependencies
