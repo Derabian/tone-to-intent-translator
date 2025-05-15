@@ -1,121 +1,87 @@
-# This script requires Streamlit and Librosa to run in a local or cloud environment
-# where audio and UI interactions are supported.
+import librosa
+import librosa.display
+import matplotlib.pyplot as plt
+import numpy as np
+import streamlit as st
+import openai
+from openai import ChatCompletion   # added import for ChatCompletion
+import os
+import requests
+from dotenv import load_dotenv   # added import for dotenv
+import asyncio
+import sys  # added import for sys
+from agents import Agent, Runner
 
-try:
-    import streamlit as st
-    import librosa
-    import numpy as np
-    import tempfile
-    import openai
-    import os
-    from dotenv import load_dotenv
-    from elevenlabs.client import ElevenLabs, VoiceSettings
-except ModuleNotFoundError as e:
-    print("❌ Required modules not found:", e)
-    print("Please run this script in an environment with Streamlit, Librosa, ElevenLabs SDK, OpenAI Python client, and python-dotenv installed.")
-    exit(1)
+# Disable traceback in Streamlit by overriding sys.excepthook
+def streamlit_excepthook(exctype, value, tb):
+    st.error(f"Error: {value}")
+sys.excepthook = streamlit_excepthook
 
-# === CONFIGURATION ===
-load_dotenv()  # Load environment variables from .env file
+# Function to record audio
+# Step 1: Record or Upload Audio
+st.header("Step 1: Record or Upload Audio")
+audio_file = st.file_uploader("Upload an audio file (.wav)", type=["wav"])
+audio_value = st.audio_input("Record a voice message")
 
-ElevenLabs.api_key = os.getenv("api_key")
-client = ElevenLabs(api_key=elevenLabs.api_key)
 
-# Securely load OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
-if not openai.api_key:
-    raise ValueError("❌ OPENAI_API_KEY environment variable is not set. Please set it before running the app.")
-
-st.title("🎤 Tone-to-Intent Translator for Speech Empowerment")
-
-st.markdown("""
-This app helps individuals with speech impairments express intent through sound.
-Upload a vocal sound (e.g., hum, tone), describe the intended message in text, and receive a matching synthesized voice.
-""")
-
-# Step 1: Upload audio file
-uploaded_file = st.file_uploader("Upload your vocal sound (MP3/WAV)", type=["mp3", "wav"], key="voice_upload")
-
-# Step 2: Enter intended message
-user_message = st.text_input("What were you trying to communicate with this sound?")
-
-# Step 3: Analyze audio if both inputs are present
-if uploaded_file and user_message:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp:
-        tmp.write(uploaded_file.read())
-        audio_path = tmp.name
-
-    st.audio(audio_path, format='audio/wav')
-
-    # Load audio with librosa
-    y, sr = librosa.load(audio_path, sr=None)
+# Function to analyze audio
+def get_audio_analysis(y, sr):
+    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
+    mfccs_mean = np.mean(mfccs, axis=1)
     duration = librosa.get_duration(y=y, sr=sr)
     pitch = librosa.yin(y, fmin=50, fmax=300, sr=sr)
     pitch_arc = f"{int(np.min(pitch))}Hz → {int(np.median(pitch))}Hz → {int(np.max(pitch))}Hz"
     intensity = np.mean(librosa.feature.rms(y=y))
-
+    
     # Display analysis
     st.subheader("📊 Acoustic Summary")
     st.write({
+        "MFCCs (mean)": [round(float(mfcc), 4) for mfcc in mfccs_mean],
         "Duration (s)": round(duration, 2),
         "Pitch Arc": pitch_arc,
         "Intensity (RMS avg)": round(float(intensity), 4)
     })
+    return { "duration": duration, "pitch_arc": pitch_arc, "intensity": intensity }
 
+# Streamlit UI
+st.title("Tone Analysis and Message Refinement")
+
+# Step 2: Analyze Audio Tone
+if audio_file:
+    st.header("Step 2: Analyze Audio Tone")
+    y, sr = librosa.load(audio_file)
+
+    if audio_value:
+        y, sr = librosa.load(audio_value)
+
+    if len(y) == 0:
+        st.error("The uploaded or recorded audio file is empty. Please try again.")
+    else:
+        # Analyze audio and display results
+        analysis = get_audio_analysis(y, sr)
+        duration = analysis["duration"]
+        pitch_arc = analysis["pitch_arc"]
+        intensity = analysis["intensity"]
+
+# Step 3: Enter Intended Message
+st.header("Step 3: Enter Your Intended Message")
+user_input = st.text_input("Enter your intended message:")
+
+if st.button("Refine Message"):
+    user_message = user_input  # fix: assign captured input instead of st.text_input
     # Generate voice description
     voice_description = f"Duration: {round(duration,2)}s. Pitch: {pitch_arc}. Intensity: {round(float(intensity),4)}."
 
-    # Use OpenAI to adapt user message with acoustic shape using the new v1 API
-    system_prompt = (
-        "You are a communication assistant. Based on the acoustic tone (pitch shape, intensity, duration),"
-        " rewrite the user's intended message to match the emotional tone and rhythm suggested by the sound."
-        " Keep the structure and message intact, but align it with the expressive curve of the uploaded tone."
+async def main():
+    agent = Agent(
+        name="Assistant",
+        instructions="You are a communication assistant. Based on the acoustic tone (pitch shape, intensity, duration), "
+                     "rewrite the user's intended message to match the mfccs and audio metrics by strongly aligning it with the expressive curve of the uploaded tone. "
     )
+    # Use the correct variable user_message here
+    result = await Runner.run(agent, f"Message: '{user_message}'\nTone Profile: {voice_description}")
+    st.write(result.final_output)
 
-    client_openai = openai.OpenAI()
-    chat_completion = client_openai.chat.completions.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Message: '{user_message}'\nTone Profile: {voice_description}"}
-        ]
-    )
+asyncio.run(main())
 
-    revised_message = chat_completion.choices[0].message.content.strip()
 
-    # Display revised message
-    st.subheader("📝 OpenAI-Rewritten Message")
-    st.markdown(revised_message)
-
-    # Generate synthetic voice from ElevenLabs
-    st.subheader("🎧 Synthesized Voice Output")
-    st.markdown(f"**Original Message:** {user_message}")
-    st.markdown(f"**Revised Message:** {revised_message}")
-    st.markdown(f"**Voice Description:** {voice_description}")
-
-    try:
-        # Generate audio using ElevenLabs
-        audio_generator = client.text_to_speech.convert(
-            text=revised_message,
-            voice_id="JBFqnCBsd6RMkjVDRZzb",  # Replace with the correct voice ID
-            model_id="eleven_multilingual_v2",
-            voice_settings=VoiceSettings(
-                stability=0.3,
-                similarity_boost=0.6,
-                style=0.4
-            )
-        )
-        
-        # Write the generator's output to a file
-        output_path = "synthesized_response.mp3"
-        with open(output_path, "wb") as f:
-            for chunk in audio_generator:
-                f.write(chunk)
-        
-        # Play the audio in Streamlit
-        st.audio(output_path, format="audio/mp3")
-    except Exception as e:
-        st.error(f"❌ Failed to generate voice: {e}")
-
-else:
-    st.info("Please upload a sound and type your intended message above.")
