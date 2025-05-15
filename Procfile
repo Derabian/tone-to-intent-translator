@@ -1,1 +1,1 @@
-web: streamlit run protoai.py --server.port=$PORT --server.enableCORS=false
+web: streamlit run streamlit.py --server.port=$PORT --server.enableCORS=false
