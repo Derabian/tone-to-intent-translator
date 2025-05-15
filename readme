@@ -39,15 +39,10 @@ OPENAI_API_KEY=sk-...
 
 (Your ElevenLabs key is currently hardcoded in the script — consider moving that to the .env as well.)
 
-4. Run the App
-
-streamlit run protoai.py
 
 🛠️ Tech Stack
 
 Python 3.10+
-
-Streamlit – Interactive front-end
 
 Librosa – Audio feature extraction
 

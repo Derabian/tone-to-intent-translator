@@ -9,7 +9,7 @@ try:
     import openai
     import os
     from dotenv import load_dotenv
-    from elevenlabs import ElevenLabs, VoiceSettings
+    from elevenlabs.client import ElevenLabs, VoiceSettings
 except ModuleNotFoundError as e:
     print("❌ Required modules not found:", e)
     print("Please run this script in an environment with Streamlit, Librosa, ElevenLabs SDK, OpenAI Python client, and python-dotenv installed.")
