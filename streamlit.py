@@ -8,6 +8,14 @@ from openai import ChatCompletion   # added import for ChatCompletion
 import os
 import requests
 from dotenv import load_dotenv   # added import for dotenv
+import asyncio
+import sys  # added import for sys
+from agents import Agent, Runner
+
+# Disable traceback in Streamlit by overriding sys.excepthook
+def streamlit_excepthook(exctype, value, tb):
+    st.error(f"Error: {value}")
+sys.excepthook = streamlit_excepthook
 
 # Function to record audio
 # Step 1: Record or Upload Audio
@@ -55,60 +63,25 @@ if audio_file:
         pitch_arc = analysis["pitch_arc"]
         intensity = analysis["intensity"]
 
-        # Step 3: Enter Intended Message
-        st.header("Step 3: Enter Your Intended Message")
-        user_input = st.text_input("Enter your intended message:")
+# Step 3: Enter Intended Message
+st.header("Step 3: Enter Your Intended Message")
+user_input = st.text_input("Enter your intended message:")
 
-        if st.button("Refine Message"):
-            user_message = user_input  # Assign the intended message to user_message
+if st.button("Refine Message"):
+    user_message = user_input  # fix: assign captured input instead of st.text_input
+    # Generate voice description
+    voice_description = f"Duration: {round(duration,2)}s. Pitch: {pitch_arc}. Intensity: {round(float(intensity),4)}."
 
-            # Generate voice description
-            voice_description = f"Duration: {round(duration,2)}s. Pitch: {pitch_arc}. Intensity: {round(float(intensity),4)}."
+async def main():
+    agent = Agent(
+        name="Assistant",
+        instructions="You are a communication assistant. Based on the acoustic tone (pitch shape, intensity, duration), "
+                     "rewrite the user's intended message to match the mfccs and audio metrics by strongly aligning it with the expressive curve of the uploaded tone. "
+    )
+    # Use the correct variable user_message here
+    result = await Runner.run(agent, f"Message: '{user_message}'\nTone Profile: {voice_description}")
+    st.write(result.final_output)
 
-            # Use ChatCompletion create() method from the imported ChatCompletion
-            system_prompt = (
-                "You are a communication assistant. Based on the acoustic tone (pitch shape, intensity, duration), "
-                "rewrite the user's intended message to match the emotional tone and rhythm suggested by the sound. "
-                "Keep the structure and message intact, but align it with the expressive curve of the uploaded tone."
-            )
+asyncio.run(main())
 
-            chat_completion = ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Message: '{user_message}'\nTone Profile: {voice_description}"}
-                ]
-            )
 
-            revised_message = chat_completion.choices[0].message.content.strip()
-
-            # Display revised message
-            st.subheader("📝 OpenAI-Rewritten Message")
-            st.markdown(revised_message)
-
-            # Generate synthetic voice from ElevenLabs
-            st.subheader("🎧 Synthesized Voice Output")
-            st.markdown(f"**Original Message:** {user_message}")
-            st.markdown(f"**Revised Message:** {revised_message}")
-            st.markdown(f"**Voice Description:** {voice_description}")
-
-# New Section: Step 4 - Display Metrics Analysis Upload Use Case
-if st.button("Upload Training Metrics"):
-    load_dotenv("/home/dastinkartoum/first/start/.env")
-    if not os.getenv('OPENAI_API_KEY'):
-        st.error("API key not found. Please set the OPENAI_API_KEY environment variable.")
-    else:
-        headers = {
-            "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}"
-        }
-        data = {
-            "purpose": "audio_anlysis",
-            "filename": "training_examples.jsonl",
-            "bytes": 2147483648,
-            "mime_type": "text/jsonl"
-        }
-        response = requests.post("https://api.openai.com/v1/uploads", headers=headers, json=data)
-        if response.ok:
-            st.success("Upload successful: " + str(response.json()))
-        else:
-            st.error("Upload failed: " + response.text)
