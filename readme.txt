@@ -58,7 +58,7 @@ dotenv – Secure API key management
 📁 Project Structure
 
 .
-├── protoai.py         # Main Streamlit app
+├── streamlit.py         # Main Streamlit app
 ├── .env               # Environment variables (not committed)
 ├── requirements.txt   # Python dependencies
 └── README.md
